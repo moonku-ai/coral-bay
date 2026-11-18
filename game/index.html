@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Coral Bay — Open-World Crime Game</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1420;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff; }
+  #game, #game canvas { width: 100%; height: 100%; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  .panel { background: rgba(8, 16, 28, 0.72); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 8px; padding: 8px 12px; }
+  #top-left { position: absolute; top: 12px; left: 12px; display: flex; gap: 10px; align-items: flex-start; }
+  #cash { font-size: 26px; font-weight: 800; color: #7dff6a; }
+  #health, #armor { font-size: 15px; font-weight: 700; }
+  #stars { font-size: 24px; letter-spacing: 2px; }
+  #wanted-label { font-size: 12px; font-weight: 800; color: #ff8080; letter-spacing: 1px; }
+  #top-right { position: absolute; top: 12px; right: 12px; text-align: right; }
+  #clock { font-size: 22px; font-weight: 800; }
+  #radio { font-size: 13px; color: #ffd84a; }
+  #objective { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    font-size: 16px; font-weight: 700; color: #ffd84a; text-align: center; max-width: 520px; }
+  #mission-list { position: absolute; top: 120px; left: 12px; font-size: 13px; line-height: 1.7; }
+  #mission-list .mi.done { color: #7dff6a; }
+  #mission-list .mi { color: #cfe8ff; }
+  #speed { position: absolute; bottom: 16px; right: 16px; font-size: 30px; font-weight: 800;
+    text-shadow: 0 2px 6px #000; }
+  #minimap { position: absolute; bottom: 16px; left: 16px; border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 50%; background: rgba(10,20,30,0.8); }
+  #toast { position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%);
+    font-size: 19px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px #000;
+    opacity: 0; transition: opacity 0.3s; text-align: center; }
+  #log { position: absolute; bottom: 210px; left: 16px; font-size: 13px; color: #bfe8bf;
+    text-shadow: 0 1px 4px #000; line-height: 1.5; }
+  #controls-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: rgba(255,255,255,0.75); text-shadow: 0 1px 4px #000; }
+  #bigmap { position: fixed; inset: 0; background: rgba(4, 10, 18, 0.92); display: none; z-index: 8;
+    text-align: center; padding-top: 20px; }
+  #bigmap-canvas { border: 2px solid #fff; border-radius: 8px; }
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; z-index: 10; text-align: center;
+    background: linear-gradient(160deg, #0b2a4a 0%, #123a5e 45%, #ff7a4a 100%); }
+  .screen h1 { font-size: 64px; letter-spacing: 6px; color: #ffd84a;
+    text-shadow: 0 4px 0 #c22a2a, 0 8px 24px rgba(0,0,0,0.6); }
+  .screen h2 { font-size: 20px; font-weight: 400; color: #eaf6ff; margin: 10px 0 22px; }
+  .screen p { max-width: 620px; font-size: 15px; line-height: 1.6; color: #d8ecff; margin-bottom: 14px; }
+  .screen button { pointer-events: auto; font-size: 20px; font-weight: 800; padding: 14px 42px;
+    border: none; border-radius: 10px; background: #ffd84a; color: #1a1a1a; cursor: pointer; margin: 6px; }
+  .screen button:hover { background: #ffe97a; }
+  .screen .keys { font-size: 13px; color: #bcd8ef; line-height: 1.9; }
+  #garage-list { text-align: left; max-width: 640px; margin: 10px auto; }
+  .garage-row { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 14px;
+    margin: 6px 0; font-size: 15px; }
+  .garage-row button { font-size: 14px; padding: 6px 14px; margin: 0; }
+  #start-screen { display: flex; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.min.js" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud">
+  <div id="top-left">
+    <div class="panel"><div id="cash">$500</div><div id="health">♥ 100</div><div id="armor">🛡 0</div></div>
+    <div class="panel"><div id="stars">☆☆☆☆☆</div><div id="wanted-label"></div></div>
+  </div>
+  <div id="top-right"><div class="panel"><div id="clock">10:30 ☀</div><div id="radio">♪ Coral FM 88.1</div></div></div>
+  <div id="objective"></div>
+  <div id="mission-list" class="panel"></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="speed"></div>
+  <div id="toast"></div>
+  <div id="log"></div>
+  <div id="controls-hint">WASD move/drive · E enter car · R pistol · F punch · M mission · T taxi · G garage · Q radio · Tab map · H safehouse heal</div>
+</div>
+
+<div id="bigmap"><h2 style="margin-bottom:10px">CORAL BAY — press Tab to close</h2>
+  <canvas id="bigmap-canvas" width="640" height="640"></canvas></div>
+
+<div id="start-screen" class="screen">
+  <h1>CORAL BAY</h1>
+  <h2>An open-world crime story on the sunny coast</h2>
+  <p>You are <b>Rae Marlowe</b>, an ex-courier with a debt to pay in Coral Bay.
+  Work six story missions for Delia Voss and Marco Hale — deliveries, chases, a stealth
+  job, a bank heist <i>or</i> a truck escort, a street race and a boat escape — while
+  the Coral Bay police, roadblocks, spike strips and a helicopter hunt you down.
+  Steal cars, drive taxis, find 10 hidden parcels, buy faster cars at the garage.</p>
+  <button id="start-btn">▶ START GAME</button>
+  <div class="keys">WASD — move / drive &nbsp;·&nbsp; E — enter / exit car &nbsp;·&nbsp; R — draw pistol, click to fire
+  <br>F — punch &nbsp;·&nbsp; M — next mission &nbsp;·&nbsp; T — taxi job &nbsp;·&nbsp; G — garage &nbsp;·&nbsp; Q — radio
+  <br>Tab — big map &nbsp;·&nbsp; Shift — run &nbsp;·&nbsp; Space — handbrake &nbsp;·&nbsp; H — heal at safehouse</div>
+</div>
+
+<div id="pause-screen" class="screen">
+  <h1>PAUSED</h1>
+  <p>Coral Bay waits for no one — except right now.</p>
+  <button id="resume-btn">RESUME</button>
+</div>
+
+<div id="choice-screen" class="screen">
+  <h1>THE FORK</h1>
+  <h2>Marco Hale offers two jobs. Pick one — the other is gone for good.</h2>
+  <button id="choice-heist">🏦 THE CORAL HEIST — rob the bank, lose 4 stars (press 1)</button>
+  <button id="choice-escort">🚚 THE LONG WAY HOME — escort the truck alive (press 2)</button>
+</div>
+
+<div id="garage-screen" class="screen">
+  <h1>GARAGE</h1>
+  <h2>Buy cars with your cash. Owned cars appear parked around town.</h2>
+  <div id="garage-list"></div>
+  <button id="garage-close">CLOSE (G)</button>
+</div>
+
+<div id="gameover-screen" class="screen">
+  <h1 id="gameover-reason">Wasted</h1>
+  <p>The clinic patched you up. $200 hospital bill.</p>
+  <button id="respawn-btn">RESPAWN</button>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
